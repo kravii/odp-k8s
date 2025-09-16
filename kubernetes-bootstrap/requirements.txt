@@ -1,0 +1,4 @@
+# Python dependencies for Kubernetes Bootstrap Scripts
+PyYAML>=6.0
+argparse
+concurrent.futures

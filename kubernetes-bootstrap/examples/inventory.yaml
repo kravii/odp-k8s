@@ -1,0 +1,52 @@
+# Kubernetes Cluster Inventory - YAML Format
+# First 3 nodes will be designated as control-plane + worker (HA)
+# Remaining nodes will be worker-only
+
+hosts:
+  - hostname: master-01
+    ip_address: 192.168.1.10
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    
+  - hostname: master-02
+    ip_address: 192.168.1.11
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    
+  - hostname: master-03
+    ip_address: 192.168.1.12
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    
+  - hostname: worker-01
+    ip_address: 192.168.1.20
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    
+  - hostname: worker-02
+    ip_address: 192.168.1.21
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    
+  - hostname: worker-03
+    ip_address: 192.168.1.22
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production

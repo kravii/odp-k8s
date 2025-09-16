@@ -1,0 +1,7 @@
+hostname,ip_address,username,ssh_port,os,os_version,group
+master-01,192.168.1.10,root,22,ubuntu,22.04,production
+master-02,192.168.1.11,root,22,ubuntu,22.04,production
+master-03,192.168.1.12,root,22,ubuntu,22.04,production
+worker-01,192.168.1.20,root,22,ubuntu,22.04,production
+worker-02,192.168.1.21,root,22,ubuntu,22.04,production
+worker-03,192.168.1.22,root,22,ubuntu,22.04,production

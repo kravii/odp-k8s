@@ -1,0 +1,102 @@
+# Production Kubernetes Cluster Configuration
+# Optimized for production workloads with security and performance considerations
+
+# Kubernetes version (use stable releases for production)
+kubernetes_version: "1.28.0"
+
+# Network configuration
+pod_network_cidr: "10.244.0.0/16"
+service_cidr: "10.96.0.0/12"
+
+# Container runtime (containerd recommended for production)
+container_runtime: "containerd"
+
+# CNI plugin (Flannel for simplicity, Calico for advanced networking)
+cni_plugin: "flannel"
+
+# Storage class (use appropriate storage for your environment)
+storage_class: "local-path"
+
+# Timezone
+timezone: "UTC"
+
+# NTP servers (use reliable time sources)
+ntp_servers:
+  - "pool.ntp.org"
+  - "time.google.com"
+  - "time.cloudflare.com"
+
+# Firewall configuration
+firewall_rules:
+  control_plane_ports:
+    - 6443  # Kubernetes API server
+    - 2379  # etcd server client API
+    - 2380  # etcd server peer API
+    - 10250 # kubelet API
+    - 10251 # kube-scheduler
+    - 10252 # kube-controller-manager
+    - 10259 # kube-scheduler (secure)
+    - 10257 # kube-controller-manager (secure)
+  
+  worker_ports:
+    - 10250   # kubelet API
+    - 30000   # NodePort services start
+    - 32767   # NodePort services end
+  
+  common_ports:
+    - 22   # SSH
+    - 80   # HTTP
+    - 443  # HTTPS
+    - 53   # DNS
+
+# Advanced production configuration
+advanced:
+  # Enable audit logging for security
+  audit_logging: true
+  
+  # Pod security standards (restricted for production)
+  pod_security_standards: "restricted"
+  
+  # Resource limits for system components
+  resource_limits:
+    cpu: "4"
+    memory: "8Gi"
+  
+  # Node labels for organization
+  node_labels:
+    environment: "production"
+    node-type: "baremetal"
+    datacenter: "dc1"
+  
+  # Taints for control plane nodes
+  control_plane_taints:
+    - "node-role.kubernetes.io/control-plane:NoSchedule"
+  
+  # Additional etcd configuration
+  etcd:
+    data_dir: "/var/lib/etcd"
+    backup_retention_days: 7
+    backup_schedule: "0 2 * * *"  # Daily at 2 AM
+  
+  # API server configuration
+  api_server:
+    audit_log_path: "/var/log/audit.log"
+    audit_log_maxage: 30
+    audit_log_maxbackups: 3
+    audit_log_maxsize: 100
+  
+  # Kubelet configuration
+  kubelet:
+    max_pods: 110
+    kube_reserved:
+      cpu: "100m"
+      memory: "100Mi"
+      ephemeral-storage: "1Gi"
+    system_reserved:
+      cpu: "100m"
+      memory: "100Mi"
+      ephemeral-storage: "1Gi"
+    eviction_hard:
+      memory.available: "100Mi"
+      nodefs.available: "10%"
+      imagefs.available: "15%"

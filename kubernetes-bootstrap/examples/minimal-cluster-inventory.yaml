@@ -1,0 +1,27 @@
+# Minimal Kubernetes Cluster Inventory Example
+# 3 nodes total: 3 control plane + worker nodes (minimum for HA)
+
+hosts:
+  - hostname: node-01
+    ip_address: 192.168.1.10
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: development
+    
+  - hostname: node-02
+    ip_address: 192.168.1.11
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: development
+    
+  - hostname: node-03
+    ip_address: 192.168.1.12
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: development

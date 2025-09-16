@@ -1,0 +1,75 @@
+# Kubernetes Cluster Configuration Template
+# Copy this file and modify as needed for your cluster
+
+# Kubernetes version to install
+kubernetes_version: "1.28.0"
+
+# Network configuration
+pod_network_cidr: "10.244.0.0/16"
+service_cidr: "10.96.0.0/12"
+
+# Container runtime (containerd or docker)
+container_runtime: "containerd"
+
+# CNI plugin (flannel, calico, weave)
+cni_plugin: "flannel"
+
+# Storage class (local-path, nfs, ceph)
+storage_class: "local-path"
+
+# Timezone for all nodes
+timezone: "UTC"
+
+# NTP servers for time synchronization
+ntp_servers:
+  - "pool.ntp.org"
+  - "time.google.com"
+  - "time.cloudflare.com"
+
+# Firewall configuration
+firewall_rules:
+  # Control plane ports
+  control_plane_ports:
+    - 6443  # Kubernetes API server
+    - 2379  # etcd server client API
+    - 2380  # etcd server peer API
+    - 10250 # kubelet API
+    - 10251 # kube-scheduler
+    - 10252 # kube-controller-manager
+    - 10259 # kube-scheduler (secure)
+    - 10257 # kube-controller-manager (secure)
+  
+  # Worker node ports
+  worker_ports:
+    - 10250   # kubelet API
+    - 30000   # NodePort services start
+    - 32767   # NodePort services end
+  
+  # Common ports
+  common_ports:
+    - 22   # SSH
+    - 80   # HTTP
+    - 443  # HTTPS
+    - 53   # DNS
+
+# Advanced configuration
+advanced:
+  # Enable audit logging
+  audit_logging: false
+  
+  # Pod security standards
+  pod_security_standards: "restricted"
+  
+  # Resource limits
+  resource_limits:
+    cpu: "2"
+    memory: "4Gi"
+  
+  # Node labels
+  node_labels:
+    environment: "production"
+    node-type: "baremetal"
+  
+  # Taints for control plane nodes
+  control_plane_taints:
+    - "node-role.kubernetes.io/control-plane:NoSchedule"

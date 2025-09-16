@@ -1,0 +1,86 @@
+# Development Kubernetes Cluster Configuration
+# Optimized for development workloads with relaxed security for easier testing
+
+# Kubernetes version (can use newer versions for development)
+kubernetes_version: "1.28.0"
+
+# Network configuration
+pod_network_cidr: "10.244.0.0/16"
+service_cidr: "10.96.0.0/12"
+
+# Container runtime
+container_runtime: "containerd"
+
+# CNI plugin
+cni_plugin: "flannel"
+
+# Storage class
+storage_class: "local-path"
+
+# Timezone
+timezone: "UTC"
+
+# NTP servers
+ntp_servers:
+  - "pool.ntp.org"
+  - "time.google.com"
+
+# Firewall configuration (more permissive for development)
+firewall_rules:
+  control_plane_ports:
+    - 6443  # Kubernetes API server
+    - 2379  # etcd server client API
+    - 2380  # etcd server peer API
+    - 10250 # kubelet API
+    - 10251 # kube-scheduler
+    - 10252 # kube-controller-manager
+    - 10259 # kube-scheduler (secure)
+    - 10257 # kube-controller-manager (secure)
+  
+  worker_ports:
+    - 10250   # kubelet API
+    - 30000   # NodePort services start
+    - 32767   # NodePort services end
+  
+  common_ports:
+    - 22   # SSH
+    - 80   # HTTP
+    - 443  # HTTPS
+    - 53   # DNS
+    - 8080 # Common dev port
+    - 3000 # Common dev port
+    - 5000 # Common dev port
+
+# Development-specific configuration
+advanced:
+  # Disable audit logging for performance
+  audit_logging: false
+  
+  # Relaxed pod security standards for development
+  pod_security_standards: "privileged"
+  
+  # Lower resource limits for development
+  resource_limits:
+    cpu: "2"
+    memory: "4Gi"
+  
+  # Node labels for development
+  node_labels:
+    environment: "development"
+    node-type: "baremetal"
+  
+  # No taints for easier scheduling
+  control_plane_taints: []
+  
+  # Simplified etcd configuration
+  etcd:
+    data_dir: "/var/lib/etcd"
+    backup_retention_days: 3
+  
+  # Relaxed kubelet configuration
+  kubelet:
+    max_pods: 50
+    eviction_hard:
+      memory.available: "50Mi"
+      nodefs.available: "5%"
+      imagefs.available: "10%"

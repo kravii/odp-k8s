@@ -1,0 +1,140 @@
+# Large Kubernetes Cluster Inventory Example
+# 5 control plane nodes + 10 worker nodes for high availability and capacity
+
+hosts:
+  # Control Plane Nodes (5 nodes for high availability)
+  - hostname: master-01
+    ip_address: 192.168.1.10
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    node_type: "control-plane"
+    
+  - hostname: master-02
+    ip_address: 192.168.1.11
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    node_type: "control-plane"
+    
+  - hostname: master-03
+    ip_address: 192.168.1.12
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    node_type: "control-plane"
+    
+  - hostname: master-04
+    ip_address: 192.168.1.13
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    node_type: "control-plane"
+    
+  - hostname: master-05
+    ip_address: 192.168.1.14
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    node_type: "control-plane"
+    
+  # Worker Nodes (10 nodes for capacity)
+  - hostname: worker-01
+    ip_address: 192.168.1.20
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    node_type: "worker"
+    
+  - hostname: worker-02
+    ip_address: 192.168.1.21
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    node_type: "worker"
+    
+  - hostname: worker-03
+    ip_address: 192.168.1.22
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    node_type: "worker"
+    
+  - hostname: worker-04
+    ip_address: 192.168.1.23
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    node_type: "worker"
+    
+  - hostname: worker-05
+    ip_address: 192.168.1.24
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    node_type: "worker"
+    
+  - hostname: worker-06
+    ip_address: 192.168.1.25
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    node_type: "worker"
+    
+  - hostname: worker-07
+    ip_address: 192.168.1.26
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    node_type: "worker"
+    
+  - hostname: worker-08
+    ip_address: 192.168.1.27
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    node_type: "worker"
+    
+  - hostname: worker-09
+    ip_address: 192.168.1.28
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    node_type: "worker"
+    
+  - hostname: worker-10
+    ip_address: 192.168.1.29
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    node_type: "worker"
