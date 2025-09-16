@@ -18,11 +18,18 @@ A comprehensive solution for automated Kubernetes cluster setup and management o
 ┌─────────────────────────────────────────────────────────────┐
 │                    Hetzner Baremetal Servers                │
 ├─────────────────────────────────────────────────────────────┤
-│  Control Plane (3 nodes)  │  Worker Nodes (N nodes)        │
-│  - API Server             │  - Application Workloads       │
-│  - etcd                   │  - Resource Pooling            │
-│  - Controller Manager     │  - Storage Management          │
-│  - Scheduler              │                                │
+│  Hybrid Nodes (N nodes, minimum 3)                         │
+│  - Control Plane Components (first 3 nodes)                │
+│    * API Server                                            │
+│    * etcd                                                  │
+│    * Controller Manager                                    │
+│    * Scheduler                                             │
+│  - Worker Components (all nodes)                           │
+│    * kubelet                                               │
+│    * kube-proxy                                            │
+│    * Application Workloads                                 │
+│    * Resource Pooling                                      │
+│    * Storage Management                                    │
 └─────────────────────────────────────────────────────────────┘
                               │
 ┌─────────────────────────────────────────────────────────────┐
@@ -138,8 +145,9 @@ export ACCELDATA_SSH_KEY="ssh-rsa AAAAB3NzaC1yc2E..."
 ```
 
 ### Server Requirements
-- **Control Plane**: 3x servers (4 CPU, 8GB RAM, 100GB SSD)
-- **Worker Nodes**: Nx servers (8 CPU, 16GB RAM, 500GB SSD)
+- **Hybrid Nodes**: Nx servers (minimum 3, recommended 2+ vCPU, 8GB+ RAM, 100GB+ SSD)
+- **Control Plane**: First 3 nodes serve as control plane (API Server, etcd, Controller Manager, Scheduler)
+- **Worker**: All nodes serve as workers (kubelet, kube-proxy, application workloads)
 - **Storage**: Additional disks for persistent storage
 
 ## Security

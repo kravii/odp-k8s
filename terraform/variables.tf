@@ -21,26 +21,18 @@ variable "server_image" {
   default     = "ubuntu-22.04"
 }
 
-variable "control_plane_count" {
-  description = "Number of control plane nodes"
+variable "node_count" {
+  description = "Number of Kubernetes nodes (minimum 3 for HA)"
   type        = number
   default     = 3
+  validation {
+    condition     = var.node_count >= 3
+    error_message = "Node count must be at least 3 for high availability."
+  }
 }
 
-variable "worker_node_count" {
-  description = "Number of worker nodes"
-  type        = number
-  default     = 3
-}
-
-variable "control_plane_server_type" {
-  description = "Server type for control plane nodes"
-  type        = string
-  default     = "cx21"  # 2 vCPU, 4GB RAM
-}
-
-variable "worker_server_type" {
-  description = "Server type for worker nodes"
+variable "node_server_type" {
+  description = "Server type for Kubernetes nodes"
   type        = string
   default     = "cx31"  # 2 vCPU, 8GB RAM
 }

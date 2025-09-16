@@ -9,21 +9,30 @@ This document describes the architecture of the Hetzner Kubernetes Cluster Manag
 │                    Hetzner Cloud Infrastructure                │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
-│  │ Control Plane 1 │  │ Control Plane 2 │  │ Control Plane 3 │  │
+│  │   Hybrid Node 1  │  │   Hybrid Node 2  │  │   Hybrid Node 3  │  │
+│  │ Control Plane:   │  │ Control Plane:   │  │ Control Plane:   │  │
 │  │ - API Server    │  │ - API Server    │  │ - API Server    │  │
 │  │ - etcd          │  │ - etcd          │  │ - etcd          │  │
 │  │ - Controller    │  │ - Controller    │  │ - Controller    │  │
 │  │ - Scheduler     │  │ - Scheduler     │  │ - Scheduler     │  │
+│  │ Worker:         │  │ Worker:         │  │ Worker:         │  │
+│  │ - kubelet       │  │ - kubelet       │  │ - kubelet       │  │
+│  │ - kube-proxy    │  │ - kube-proxy    │  │ - kube-proxy    │  │
+│  │ - containerd    │  │ - containerd    │  │ - containerd    │  │
+│  │ - CNI plugins   │  │ - CNI plugins   │  │ - CNI plugins   │  │
+│  │ - Applications  │  │ - Applications  │  │ - Applications  │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
 │           │                     │                     │        │
 │           └─────────────────────┼─────────────────────┘        │
 │                                 │                              │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
-│  │   Worker Node 1  │  │   Worker Node 2  │  │   Worker Node 3  │  │
+│  │   Hybrid Node 4  │  │   Hybrid Node 5  │  │   Hybrid Node N  │  │
+│  │ Worker Only:     │  │ Worker Only:     │  │ Worker Only:     │  │
 │  │ - kubelet        │  │ - kubelet        │  │ - kubelet        │  │
 │  │ - kube-proxy     │  │ - kube-proxy     │  │ - kube-proxy     │  │
 │  │ - containerd     │  │ - containerd     │  │ - containerd     │  │
 │  │ - CNI plugins    │  │ - CNI plugins    │  │ - CNI plugins    │  │
+│  │ - Applications   │  │ - Applications   │  │ - Applications   │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
                                  │
@@ -48,8 +57,9 @@ This document describes the architecture of the Hetzner Kubernetes Cluster Manag
 ### Infrastructure Layer
 
 #### Hetzner Cloud Servers
-- **Control Plane Nodes**: 3x servers for high availability
-- **Worker Nodes**: Nx servers for application workloads
+- **Hybrid Nodes**: Nx servers (minimum 3) serving as both control plane and workers
+- **Control Plane**: First 3 nodes run control plane components (API Server, etcd, Controller Manager, Scheduler)
+- **Worker**: All nodes run worker components (kubelet, kube-proxy, applications)
 - **Load Balancer**: Distributes API server traffic
 - **Private Network**: Secure communication between nodes
 - **Storage Volumes**: Persistent storage for applications
@@ -71,8 +81,8 @@ Internet
 │ 10.0.1.0/24│
 └─────────────┘
     │
-    ├── Control Plane Nodes (10.0.1.10-12)
-    └── Worker Nodes (10.0.1.20-22)
+    ├── Hybrid Nodes (10.0.1.10-12) - Control Plane + Worker
+    └── Additional Hybrid Nodes (10.0.1.13+) - Worker Only
 ```
 
 ### Kubernetes Layer

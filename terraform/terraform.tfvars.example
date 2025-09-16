@@ -9,12 +9,10 @@ server_image = "ubuntu-22.04"
 # Cluster Configuration
 cluster_name = "hetzner-k8s-cluster"
 kubernetes_version = "1.28"
-control_plane_count = 3
-worker_node_count = 3
+node_count = 3  # Minimum 3 for HA, all nodes serve as both control plane and workers
 
-# Server Types (see https://www.hetzner.com/cloud for available types)
-control_plane_server_type = "cx21"  # 2 vCPU, 4GB RAM
-worker_server_type = "cx31"         # 2 vCPU, 8GB RAM
+# Server Type (see https://www.hetzner.com/cloud for available types)
+node_server_type = "cx31"  # 2 vCPU, 8GB RAM - suitable for both control plane and worker workloads
 
 # Storage Configuration
 additional_storage_size = 100  # GB

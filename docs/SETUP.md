@@ -16,9 +16,10 @@ This guide will walk you through setting up a complete Kubernetes cluster on Het
 - SSH key pair for server access
 
 ### System Requirements
-- Control Plane: 3x servers (minimum 2 vCPU, 4GB RAM)
-- Worker Nodes: Nx servers (minimum 2 vCPU, 8GB RAM)
-- Additional storage: 100GB+ per worker node
+- Hybrid Nodes: Nx servers (minimum 3, recommended 2+ vCPU, 8GB+ RAM)
+- Control Plane: First 3 nodes serve as control plane components
+- Worker: All nodes serve as worker components
+- Additional storage: 100GB+ per node
 
 ## Step 1: Infrastructure Setup
 
@@ -43,12 +44,10 @@ server_image = "ubuntu-22.04"
 # Cluster Configuration
 cluster_name = "hetzner-k8s-cluster"
 kubernetes_version = "1.28"
-control_plane_count = 3
-worker_node_count = 3
+node_count = 3  # Minimum 3 for HA, all nodes serve as both control plane and workers
 
-# Server Types
-control_plane_server_type = "cx21"  # 2 vCPU, 4GB RAM
-worker_server_type = "cx31"         # 2 vCPU, 8GB RAM
+# Server Type
+node_server_type = "cx31"  # 2 vCPU, 8GB RAM - suitable for both control plane and worker workloads
 
 # Storage Configuration
 additional_storage_size = 100  # GB
@@ -70,8 +69,7 @@ terraform apply
 ```
 
 This will create:
-- 3 control plane servers
-- 3 worker nodes
+- 3+ hybrid nodes (control plane + worker)
 - Private network
 - Load balancer
 - Firewall rules
@@ -87,36 +85,42 @@ Note down the IP addresses and other outputs for the next steps.
 
 ## Step 2: Kubernetes Cluster Setup
 
-### 2.1 Configure Ansible Inventory
+### 2.1 Generate Ansible Inventory
 
-Update `ansible/inventory/hosts.yml` with the server IPs from Terraform output:
+Generate the Ansible inventory automatically from Terraform output:
+
+```bash
+./scripts/generate-inventory.sh
+```
+
+This script will:
+- Read the Terraform state
+- Extract node IPs and configuration
+- Generate the inventory file dynamically
+- Support any number of nodes (minimum 3)
+
+Alternatively, you can manually update `ansible/inventory/hosts.yml` with the server IPs from Terraform output:
 
 ```yaml
 all:
   children:
-    control_plane:
+    k8s_nodes:
       hosts:
-        k8s-control-plane-1:
-          ansible_host: "YOUR_CONTROL_PLANE_IP_1"
-          node_ip: "YOUR_CONTROL_PLANE_PRIVATE_IP_1"
-        k8s-control-plane-2:
-          ansible_host: "YOUR_CONTROL_PLANE_IP_2"
-          node_ip: "YOUR_CONTROL_PLANE_PRIVATE_IP_2"
-        k8s-control-plane-3:
-          ansible_host: "YOUR_CONTROL_PLANE_IP_3"
-          node_ip: "YOUR_CONTROL_PLANE_PRIVATE_IP_3"
-    
-    workers:
-      hosts:
-        k8s-worker-1:
-          ansible_host: "YOUR_WORKER_IP_1"
-          node_ip: "YOUR_WORKER_PRIVATE_IP_1"
-        k8s-worker-2:
-          ansible_host: "YOUR_WORKER_IP_2"
-          node_ip: "YOUR_WORKER_PRIVATE_IP_2"
-        k8s-worker-3:
-          ansible_host: "YOUR_WORKER_IP_3"
-          node_ip: "YOUR_WORKER_PRIVATE_IP_3"
+        k8s-node-1:
+          ansible_host: "YOUR_NODE_IP_1"
+          node_ip: "YOUR_NODE_PRIVATE_IP_1"
+          control_plane: true
+          worker: true
+        k8s-node-2:
+          ansible_host: "YOUR_NODE_IP_2"
+          node_ip: "YOUR_NODE_PRIVATE_IP_2"
+          control_plane: true
+          worker: true
+        k8s-node-3:
+          ansible_host: "YOUR_NODE_IP_3"
+          node_ip: "YOUR_NODE_PRIVATE_IP_3"
+          control_plane: true
+          worker: true
 ```
 
 ### 2.2 Deploy Kubernetes Cluster
@@ -127,10 +131,10 @@ ansible-playbook -i inventory/hosts.yml playbooks/site.yml
 ```
 
 This will:
-- Install Docker and containerd
-- Install Kubernetes components
-- Initialize the cluster with HA control plane
-- Join worker nodes
+- Install Docker and containerd on all nodes
+- Install Kubernetes components on all nodes
+- Initialize the cluster with HA control plane (first 3 nodes)
+- Join additional control plane nodes (if more than 3 nodes)
 - Deploy CNI plugin (Flannel)
 - Set up storage classes
 - Deploy monitoring stack
@@ -141,8 +145,8 @@ This will:
 ### 2.3 Verify Cluster Setup
 
 ```bash
-# Get kubeconfig from first control plane node
-scp root@CONTROL_PLANE_IP_1:/etc/kubernetes/admin.conf ~/.kube/config
+# Get kubeconfig from first node
+scp root@NODE_IP_1:/etc/kubernetes/admin.conf ~/.kube/config
 
 # Verify cluster
 kubectl get nodes

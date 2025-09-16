@@ -2,48 +2,34 @@ all:
   children:
     k8s_nodes:
       hosts:
-        k8s-node-1:
-          ansible_host: "{{ node_ip_1 }}"
+        {% for i in range(1, node_count + 1) %}
+        k8s-node-{{ i }}:
+          ansible_host: "{{ node_ip_{{ i }} }}"
           ansible_user: root
-          node_ip: "{{ node_private_ip_1 }}"
+          node_ip: "{{ node_private_ip_{{ i }} }}"
           node_role: hybrid
-          control_plane: true
+          control_plane: {{ "true" if i <= 3 else "false" }}
           worker: true
-          node_index: 1
-        k8s-node-2:
-          ansible_host: "{{ node_ip_2 }}"
-          ansible_user: root
-          node_ip: "{{ node_private_ip_2 }}"
-          node_role: hybrid
-          control_plane: true
-          worker: true
-          node_index: 2
-        k8s-node-3:
-          ansible_host: "{{ node_ip_3 }}"
-          ansible_user: root
-          node_ip: "{{ node_private_ip_3 }}"
-          node_role: hybrid
-          control_plane: true
-          worker: true
-          node_index: 3
+          node_index: {{ i }}
+        {% endfor %}
       vars:
         ansible_python_interpreter: /usr/bin/python3
         ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
     
     control_plane:
       hosts:
-        k8s-node-1:
-        k8s-node-2:
-        k8s-node-3:
+        {% for i in range(1, min(node_count, 3) + 1) %}
+        k8s-node-{{ i }}:
+        {% endfor %}
       vars:
         ansible_python_interpreter: /usr/bin/python3
         ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
     
     workers:
       hosts:
-        k8s-node-1:
-        k8s-node-2:
-        k8s-node-3:
+        {% for i in range(1, node_count + 1) %}
+        k8s-node-{{ i }}:
+        {% endfor %}
       vars:
         ansible_python_interpreter: /usr/bin/python3
         ansible_ssh_common_args: '-o StrictHostKeyChecking=no'

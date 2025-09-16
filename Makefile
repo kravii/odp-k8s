@@ -13,8 +13,9 @@ help:
 	@echo "  plan        - Plan Terraform changes"
 	@echo "  apply       - Apply Terraform changes"
 	@echo "  destroy     - Destroy infrastructure"
+	@echo "  inventory   - Generate Ansible inventory from Terraform output"
 	@echo "  setup       - Setup Kubernetes cluster"
-	@echo "  deploy      - Deploy all components"
+	@echo "  deploy      - Deploy all components (init + apply + inventory + setup)"
 	@echo "  status      - Show cluster status"
 	@echo "  clean       - Clean up temporary files"
 	@echo "  dev-tools   - Install development tools"
@@ -44,8 +45,13 @@ setup:
 	@echo "⚙️  Setting up Kubernetes cluster..."
 	cd ansible && ansible-playbook -i inventory/hosts.yml playbooks/site.yml
 
+# Generate inventory from Terraform output
+inventory:
+	@echo "📋 Generating Ansible inventory..."
+	./scripts/generate-inventory.sh
+
 # Full deployment
-deploy: init apply setup
+deploy: init apply inventory setup
 	@echo "✅ Deployment completed!"
 
 # Status checks
@@ -173,9 +179,13 @@ quick-start:
 	@echo "==================="
 	@echo "1. Copy terraform.tfvars.example to terraform.tfvars"
 	@echo "2. Edit terraform.tfvars with your configuration"
+	@echo "   - Set node_count (minimum 3)"
+	@echo "   - Set node_server_type (e.g., cx31)"
 	@echo "3. Run: make deploy"
 	@echo "4. Access Rancher at: https://LOAD_BALANCER_IP/rancher"
 	@echo "5. Access Grafana at: https://LOAD_BALANCER_IP/grafana"
 	@echo "6. Access GUI at: https://LOAD_BALANCER_IP/gui"
 	@echo ""
+	@echo "Note: All nodes serve as both control plane and workers"
+	@echo "First 3 nodes run control plane components for HA"
 	@echo "For detailed instructions, see docs/SETUP.md"

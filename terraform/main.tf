@@ -31,21 +31,21 @@ resource "hcloud_network_subnet" "k8s_subnet" {
   ip_range     = "10.0.1.0/24"
 }
 
-# Create placement group for HA control plane
-resource "hcloud_placement_group" "control_plane" {
-  name = "k8s-control-plane"
+# Create placement group for HA nodes
+resource "hcloud_placement_group" "k8s_nodes" {
+  name = "k8s-nodes"
   type = "spread"
 }
 
-# Control Plane Servers (3 nodes for HA)
-resource "hcloud_server" "control_plane" {
-  count              = var.control_plane_count
-  name               = "k8s-control-plane-${count.index + 1}"
+# Kubernetes Nodes (Hybrid Control Plane + Worker)
+resource "hcloud_server" "k8s_nodes" {
+  count              = var.node_count
+  name               = "k8s-node-${count.index + 1}"
   image              = var.server_image
-  server_type        = var.control_plane_server_type
+  server_type        = var.node_server_type
   location           = var.location
   ssh_keys           = [hcloud_ssh_key.k8s_cluster_key.id]
-  placement_group_id = hcloud_placement_group.control_plane.id
+  placement_group_id = hcloud_placement_group.k8s_nodes.id
   
   network {
     network_id = hcloud_network.k8s_network.id
@@ -53,47 +53,27 @@ resource "hcloud_server" "control_plane" {
   }
 
   labels = {
-    role = "control-plane"
-    node = "control-plane-${count.index + 1}"
-  }
-
-  depends_on = [hcloud_network_subnet.k8s_subnet]
-}
-
-# Worker Nodes
-resource "hcloud_server" "worker_nodes" {
-  count       = var.worker_node_count
-  name        = "k8s-worker-${count.index + 1}"
-  image       = var.server_image
-  server_type = var.worker_server_type
-  location    = var.location
-  ssh_keys    = [hcloud_ssh_key.k8s_cluster_key.id]
-
-  network {
-    network_id = hcloud_network.k8s_network.id
-    ip         = "10.0.1.${20 + count.index}"
-  }
-
-  labels = {
-    role = "worker"
-    node = "worker-${count.index + 1}"
+    role = "hybrid"
+    node = "k8s-node-${count.index + 1}"
+    control-plane = count.index < 3 ? "true" : "false"  # First 3 nodes are control plane
+    worker = "true"  # All nodes are workers
   }
 
   depends_on = [hcloud_network_subnet.k8s_subnet]
 }
 
 # Additional storage volumes for persistent data
-resource "hcloud_volume" "worker_storage" {
-  count    = var.worker_node_count
-  name     = "k8s-worker-storage-${count.index + 1}"
+resource "hcloud_volume" "node_storage" {
+  count    = var.node_count
+  name     = "k8s-node-storage-${count.index + 1}"
   size     = var.additional_storage_size
   location = var.location
 }
 
-resource "hcloud_volume_attachment" "worker_storage" {
-  count     = var.worker_node_count
-  volume_id = hcloud_volume.worker_storage[count.index].id
-  server_id = hcloud_server.worker_nodes[count.index].id
+resource "hcloud_volume_attachment" "node_storage" {
+  count     = var.node_count
+  volume_id = hcloud_volume.node_storage[count.index].id
+  server_id = hcloud_server.k8s_nodes[count.index].id
   automount = true
 }
 
@@ -111,10 +91,10 @@ resource "hcloud_load_balancer_network" "k8s_api" {
 }
 
 resource "hcloud_load_balancer_target" "k8s_api" {
-  count            = var.control_plane_count
+  count            = 3  # First 3 nodes are control plane
   type             = "server"
   load_balancer_id = hcloud_load_balancer.k8s_api.id
-  server_id        = hcloud_server.control_plane[count.index].id
+  server_id        = hcloud_server.k8s_nodes[count.index].id
 }
 
 resource "hcloud_load_balancer_service" "k8s_api" {
@@ -179,16 +159,9 @@ resource "hcloud_firewall" "k8s_firewall" {
 }
 
 # Attach firewall to all servers
-resource "hcloud_firewall_attachment" "control_plane" {
-  count        = var.control_plane_count
+resource "hcloud_firewall_attachment" "k8s_nodes" {
+  count        = var.node_count
   firewall_id  = hcloud_firewall.k8s_firewall.id
-  resource_ids = [hcloud_server.control_plane[count.index].id]
-  resource_type = "server"
-}
-
-resource "hcloud_firewall_attachment" "worker_nodes" {
-  count        = var.worker_node_count
-  firewall_id  = hcloud_firewall.k8s_firewall.id
-  resource_ids = [hcloud_server.worker_nodes[count.index].id]
+  resource_ids = [hcloud_server.k8s_nodes[count.index].id]
   resource_type = "server"
 }

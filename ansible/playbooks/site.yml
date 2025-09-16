@@ -8,7 +8,7 @@
     - containerd
     - kubernetes
 
-- name: Initialize control plane
+- name: Initialize control plane on first node
   hosts: control_plane[0]
   become: yes
   roles:
@@ -19,12 +19,6 @@
   become: yes
   roles:
     - kubernetes-join-control-plane
-
-- name: Join worker nodes
-  hosts: workers
-  become: yes
-  roles:
-    - kubernetes-join-worker
 
 - name: Deploy CNI plugin
   hosts: control_plane[0]

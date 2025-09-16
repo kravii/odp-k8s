@@ -1,21 +1,21 @@
-output "control_plane_ips" {
-  description = "IP addresses of control plane nodes"
-  value       = hcloud_server.control_plane[*].ipv4_address
+output "node_ips" {
+  description = "IP addresses of all Kubernetes nodes"
+  value       = hcloud_server.k8s_nodes[*].ipv4_address
 }
 
-output "worker_node_ips" {
-  description = "IP addresses of worker nodes"
-  value       = hcloud_server.worker_nodes[*].ipv4_address
+output "node_private_ips" {
+  description = "Private IP addresses of all Kubernetes nodes"
+  value       = hcloud_server.k8s_nodes[*].network[0].ip
+}
+
+output "control_plane_ips" {
+  description = "IP addresses of control plane nodes (first 3 nodes)"
+  value       = slice(hcloud_server.k8s_nodes[*].ipv4_address, 0, 3)
 }
 
 output "control_plane_private_ips" {
-  description = "Private IP addresses of control plane nodes"
-  value       = hcloud_server.control_plane[*].network[0].ip
-}
-
-output "worker_node_private_ips" {
-  description = "Private IP addresses of worker nodes"
-  value       = hcloud_server.worker_nodes[*].network[0].ip
+  description = "Private IP addresses of control plane nodes (first 3 nodes)"
+  value       = slice(hcloud_server.k8s_nodes[*].network[0].ip, 0, 3)
 }
 
 output "load_balancer_ip" {
@@ -41,20 +41,14 @@ output "ssh_key_id" {
 output "server_inventory" {
   description = "Ansible inventory for all servers"
   value = {
-    control_plane = [
-      for i, server in hcloud_server.control_plane : {
+    nodes = [
+      for i, server in hcloud_server.k8s_nodes : {
         name = server.name
         ip   = server.ipv4_address
         private_ip = server.network[0].ip
-        role = "control-plane"
-      }
-    ]
-    workers = [
-      for i, server in hcloud_server.worker_nodes : {
-        name = server.name
-        ip   = server.ipv4_address
-        private_ip = server.network[0].ip
-        role = "worker"
+        role = "hybrid"
+        control_plane = i < 3 ? "true" : "false"
+        worker = "true"
       }
     ]
   }
