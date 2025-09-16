@@ -1,0 +1,116 @@
+---
+- name: Update package cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install essential packages
+  apt:
+    name:
+      - curl
+      - wget
+      - git
+      - vim
+      - htop
+      - net-tools
+      - bridge-utils
+      - iptables
+      - ipvsadm
+      - socat
+      - conntrack
+      - telnet
+      - unzip
+      - software-properties-common
+      - apt-transport-https
+      - ca-certificates
+      - gnupg
+      - lsb-release
+    state: present
+
+- name: Disable swap
+  shell: |
+    swapoff -a
+    sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+  args:
+    warn: false
+
+- name: Load required kernel modules
+  modprobe:
+    name: "{{ item }}"
+  loop:
+    - br_netfilter
+    - ip_vs
+    - ip_vs_rr
+    - ip_vs_wrr
+    - ip_vs_sh
+    - nf_conntrack
+
+- name: Make kernel modules persistent
+  lineinfile:
+    path: /etc/modules-load.d/k8s.conf
+    line: "{{ item }}"
+    create: yes
+  loop:
+    - br_netfilter
+    - ip_vs
+    - ip_vs_rr
+    - ip_vs_wrr
+    - ip_vs_sh
+    - nf_conntrack
+
+- name: Configure sysctl for Kubernetes
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  loop:
+    - { key: "net.bridge.bridge-nf-call-iptables", value: "1" }
+    - { key: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
+    - { key: "net.ipv4.ip_forward", value: "1" }
+    - { key: "vm.swappiness", value: "0" }
+    - { key: "vm.overcommit_memory", value: "1" }
+    - { key: "vm.panic_on_oom", value: "0" }
+    - { key: "fs.inotify.max_user_instances", value: "8192" }
+    - { key: "fs.inotify.max_user_watches", value: "1048576" }
+    - { key: "fs.file-max", value: "52706963" }
+    - { key: "fs.nr_open", value: "52706963" }
+    - { key: "net.netfilter.nf_conntrack_max", value: "2310720" }
+
+- name: Create acceldata user
+  user:
+    name: acceldata
+    groups: docker
+    shell: /bin/bash
+    create_home: yes
+    state: present
+
+- name: Add acceldata SSH key
+  authorized_key:
+    user: acceldata
+    key: "{{ acceldata_ssh_key }}"
+    state: present
+
+- name: Create Kubernetes directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /etc/kubernetes
+    - /etc/kubernetes/pki
+    - /etc/kubernetes/manifests
+    - /var/lib/kubelet
+    - /var/lib/kube-proxy
+    - /var/lib/etcd
+    - /var/log/kubernetes
+
+- name: Set hostname
+  hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Configure hosts file
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ node_ip }} {{ inventory_hostname }}"
+    state: present

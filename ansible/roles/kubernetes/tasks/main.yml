@@ -1,0 +1,69 @@
+---
+- name: Add Kubernetes GPG key
+  apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    state: present
+
+- name: Add Kubernetes repository
+  apt_repository:
+    repo: "deb https://apt.kubernetes.io/ kubernetes-xenial main"
+    state: present
+
+- name: Install Kubernetes packages
+  apt:
+    name:
+      - kubelet={{ kubernetes_version }}-00
+      - kubeadm={{ kubernetes_version }}-00
+      - kubectl={{ kubernetes_version }}-00
+    state: present
+    update_cache: yes
+
+- name: Hold Kubernetes packages to prevent auto-updates
+  dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubelet
+    - kubeadm
+    - kubectl
+
+- name: Configure kubelet
+  template:
+    src: kubelet-config.yaml.j2
+    dest: /var/lib/kubelet/config.yaml
+    mode: '0644'
+  notify: restart kubelet
+
+- name: Configure kubelet systemd service
+  copy:
+    content: |
+      [Unit]
+      Description=kubelet: The Kubernetes Node Agent
+      Documentation=https://kubernetes.io/docs/home/
+      Wants=network-online.target
+      After=network-online.target
+      After=containerd.service
+      
+      [Service]
+      ExecStart=/usr/bin/kubelet
+      Restart=always
+      StartLimitInterval=0
+      RestartSec=10
+      StandardOutput=journal
+      StandardError=journal
+      SyslogIdentifier=kubelet
+      User=root
+      EnvironmentFile=-/var/lib/kubelet/kubeadm-flags.env
+      EnvironmentFile=-/etc/default/kubelet
+      ExecStartPre=/bin/bash -xc 'if [ -S /var/run/containerd/containerd.sock ]; then /bin/bash -c "until /usr/bin/ctr --address /var/run/containerd/containerd.sock info > /dev/null 2>&1; do sleep 1; done"; else /bin/bash -c "until /usr/bin/docker info > /dev/null 2>&1; do sleep 1; done"; fi'
+      
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+    mode: '0644'
+
+- name: Enable kubelet service
+  systemd:
+    name: kubelet
+    enabled: yes
+    daemon_reload: yes

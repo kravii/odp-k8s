@@ -1,0 +1,37 @@
+---
+- name: Deploy Flannel CNI plugin
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: kube-flannel
+        labels:
+          pod-security.kubernetes.io/enforce: privileged
+
+- name: Apply Flannel RBAC
+  kubernetes.core.k8s:
+    state: present
+    src: https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+
+- name: Wait for Flannel pods to be ready
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: kube-flannel
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+  register: flannel_pods
+
+- name: Display Flannel pod status
+  debug:
+    msg: "Flannel pods: {{ flannel_pods.resources | map(attribute='metadata.name') | list }}"

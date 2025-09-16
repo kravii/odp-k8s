@@ -1,0 +1,81 @@
+---
+- name: Add Docker GPG key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Add Docker repository
+  apt_repository:
+    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+
+- name: Install containerd
+  apt:
+    name:
+      - containerd.io
+      - docker-ce-cli
+    state: present
+    update_cache: yes
+
+- name: Create containerd configuration directory
+  file:
+    path: /etc/containerd
+    state: directory
+    mode: '0755'
+
+- name: Generate containerd configuration
+  command: containerd config default
+  register: containerd_config
+  changed_when: false
+
+- name: Write containerd configuration
+  copy:
+    content: "{{ containerd_config.stdout }}"
+    dest: /etc/containerd/config.toml
+    mode: '0644'
+
+- name: Configure containerd to use systemd cgroup driver
+  replace:
+    path: /etc/containerd/config.toml
+    regexp: 'SystemdCgroup = false'
+    replace: 'SystemdCgroup = true'
+
+- name: Create containerd service override directory
+  file:
+    path: /etc/systemd/system/containerd.service.d
+    state: directory
+    mode: '0755'
+
+- name: Configure containerd service override
+  copy:
+    content: |
+      [Service]
+      ExecStart=
+      ExecStart=/usr/bin/containerd
+    dest: /etc/systemd/system/containerd.service.d/override.conf
+    mode: '0644'
+
+- name: Start and enable containerd
+  systemd:
+    name: containerd
+    state: started
+    enabled: yes
+    daemon_reload: yes
+
+- name: Install runc
+  apt:
+    name: runc
+    state: present
+
+- name: Install CNI plugins
+  unarchive:
+    src: https://github.com/containernetworking/plugins/releases/download/v1.3.0/cni-plugins-linux-amd64-v1.3.0.tgz
+    dest: /opt/cni/bin
+    remote_src: yes
+    mode: '0755'
+
+- name: Create CNI configuration directory
+  file:
+    path: /etc/cni/net.d
+    state: directory
+    mode: '0755'

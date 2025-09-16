@@ -1,0 +1,31 @@
+# Hetzner Cloud Configuration
+hcloud_token = "your-hetzner-api-token-here"
+ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vbqajDhA... your-email@example.com"
+
+# Server Configuration
+location = "nbg1"  # Options: nbg1, fsn1, hel1, ash, hil
+server_image = "ubuntu-22.04"
+
+# Cluster Configuration
+cluster_name = "hetzner-k8s-cluster"
+kubernetes_version = "1.28"
+control_plane_count = 3
+worker_node_count = 3
+
+# Server Types (see https://www.hetzner.com/cloud for available types)
+control_plane_server_type = "cx21"  # 2 vCPU, 4GB RAM
+worker_server_type = "cx31"         # 2 vCPU, 8GB RAM
+
+# Storage Configuration
+additional_storage_size = 100  # GB
+
+# Network Configuration
+pod_cidr = "10.244.0.0/16"
+service_cidr = "10.96.0.0/12"
+
+# Application Passwords
+rancher_password = "SecureRancherPassword123!"
+grafana_password = "SecureGrafanaPassword123!"
+
+# Default User Configuration
+acceldata_ssh_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vbqajDhA... acceldata@cluster"

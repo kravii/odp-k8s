@@ -1,0 +1,157 @@
+---
+- name: Create cattle-system namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: cattle-system
+        labels:
+          name: cattle-system
+
+- name: Add Rancher Helm repository
+  kubernetes.core.helm_repository:
+    name: rancher-stable
+    repo_url: https://releases.rancher.com/server-charts/stable
+
+- name: Install cert-manager
+  kubernetes.core.helm:
+    name: cert-manager
+    chart_ref: https://charts.jetstack.io
+    release_namespace: cert-manager
+    create_namespace: true
+    values:
+      installCRDs: true
+
+- name: Wait for cert-manager to be ready
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: cert-manager
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+
+- name: Install Rancher
+  kubernetes.core.helm:
+    name: rancher
+    chart_ref: rancher-stable/rancher
+    release_namespace: cattle-system
+    values:
+      hostname: "{{ api_server_lb_ip }}"
+      bootstrapPassword: "{{ rancher_password }}"
+      ingress:
+        tls:
+          source: letsEncrypt
+        extraAnnotations:
+          cert-manager.io/cluster-issuer: "letsencrypt-prod"
+          nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      replicas: 3
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+        requests:
+          cpu: 500m
+          memory: 1Gi
+      persistence:
+        enabled: true
+        storageClass: local-path
+        size: 10Gi
+
+- name: Wait for Rancher to be ready
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: cattle-system
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 600
+  register: rancher_pods
+
+- name: Display Rancher pod status
+  debug:
+    msg: "Rancher pods: {{ rancher_pods.resources | map(attribute='metadata.name') | list }}"
+
+- name: Create Rancher service for external access
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: rancher-external
+        namespace: cattle-system
+      spec:
+        type: NodePort
+        ports:
+        - port: 80
+          targetPort: 80
+          nodePort: 30080
+          protocol: TCP
+        - port: 443
+          targetPort: 443
+          nodePort: 30443
+          protocol: TCP
+        selector:
+          app: rancher
+
+- name: Create ClusterRole for Rancher management
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRole
+      metadata:
+        name: rancher-cluster-manager
+      rules:
+      - apiGroups: [""]
+        resources: ["nodes", "pods", "services", "endpoints", "persistentvolumeclaims", "events", "configmaps", "secrets"]
+        verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+      - apiGroups: ["apps"]
+        resources: ["deployments", "daemonsets", "replicasets", "statefulsets"]
+        verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+      - apiGroups: ["extensions"]
+        resources: ["ingresses"]
+        verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+      - apiGroups: ["networking.k8s.io"]
+        resources: ["networkpolicies"]
+        verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+      - apiGroups: ["storage.k8s.io"]
+        resources: ["storageclasses", "persistentvolumes"]
+        verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+      - apiGroups: ["batch"]
+        resources: ["jobs", "cronjobs"]
+        verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+- name: Create ServiceAccount for Rancher
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: rancher-manager
+        namespace: cattle-system
+
+- name: Create ClusterRoleBinding for Rancher
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: rancher-cluster-manager-binding
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: rancher-cluster-manager
+      subjects:
+      - kind: ServiceAccount
+        name: rancher-manager
+        namespace: cattle-system

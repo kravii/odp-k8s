@@ -1,0 +1,53 @@
+---
+- name: Deploy local-path provisioner
+  kubernetes.core.k8s:
+    state: present
+    src: https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+
+- name: Set local-path as default storage class
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: storage.k8s.io/v1
+      kind: StorageClass
+      metadata:
+        name: local-path
+        annotations:
+          storageclass.kubernetes.io/is-default-class: "true"
+      provisioner: rancher.io/local-path
+      reclaimPolicy: Delete
+      volumeBindingMode: WaitForFirstConsumer
+
+- name: Create additional storage classes for different disk types
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: storage.k8s.io/v1
+      kind: StorageClass
+      metadata:
+        name: "{{ item.name }}"
+      provisioner: rancher.io/local-path
+      reclaimPolicy: Delete
+      volumeBindingMode: WaitForFirstConsumer
+      parameters:
+        nodePath: "{{ item.path }}"
+  loop:
+    - { name: "fast-ssd", path: "/mnt/fast-ssd" }
+    - { name: "slow-hdd", path: "/mnt/slow-hdd" }
+    - { name: "nvme", path: "/mnt/nvme" }
+
+- name: Create storage directories on worker nodes
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /mnt/fast-ssd
+    - /mnt/slow-hdd
+    - /mnt/nvme
+  delegate_to: "{{ groups['workers'] }}"

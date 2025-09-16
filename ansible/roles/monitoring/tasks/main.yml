@@ -1,0 +1,268 @@
+---
+- name: Create monitoring namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: monitoring
+        labels:
+          name: monitoring
+
+- name: Install Helm
+  shell: |
+    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  args:
+    warn: false
+
+- name: Add Prometheus Helm repository
+  kubernetes.core.helm_repository:
+    name: prometheus-community
+    repo_url: https://prometheus-community.github.io/helm-charts
+
+- name: Add Grafana Helm repository
+  kubernetes.core.helm_repository:
+    name: grafana
+    repo_url: https://grafana.github.io/helm-charts
+
+- name: Install Prometheus Stack
+  kubernetes.core.helm:
+    name: prometheus
+    chart_ref: prometheus-community/kube-prometheus-stack
+    release_namespace: monitoring
+    values:
+      prometheus:
+        prometheusSpec:
+          storageSpec:
+            volumeClaimTemplate:
+              spec:
+                storageClassName: local-path
+                accessModes: ["ReadWriteOnce"]
+                resources:
+                  requests:
+                    storage: 50Gi
+      grafana:
+        adminPassword: "{{ grafana_password }}"
+        persistence:
+          enabled: true
+          storageClassName: local-path
+          size: 10Gi
+        service:
+          type: NodePort
+          nodePort: 30000
+      alertmanager:
+        alertmanagerSpec:
+          storage:
+            volumeClaimTemplate:
+              spec:
+                storageClassName: local-path
+                accessModes: ["ReadWriteOnce"]
+                resources:
+                  requests:
+                    storage: 10Gi
+      nodeExporter:
+        enabled: true
+      kubeStateMetrics:
+        enabled: true
+      kubelet:
+        enabled: true
+      kubeControllerManager:
+        enabled: true
+      kubeScheduler:
+        enabled: true
+      kubeEtcd:
+        enabled: true
+      kubeProxy:
+        enabled: true
+      kubeApiServer:
+        enabled: true
+
+- name: Create custom Grafana dashboard for baremetal monitoring
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: baremetal-dashboard
+        namespace: monitoring
+        labels:
+          grafana_dashboard: "1"
+      data:
+        baremetal-dashboard.json: |
+          {
+            "dashboard": {
+              "id": null,
+              "title": "Baremetal Server Monitoring",
+              "tags": ["baremetal", "servers"],
+              "style": "dark",
+              "timezone": "browser",
+              "panels": [
+                {
+                  "id": 1,
+                  "title": "CPU Usage",
+                  "type": "graph",
+                  "targets": [
+                    {
+                      "expr": "100 - (avg by (instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+                      "legendFormat": "{{instance}}"
+                    }
+                  ],
+                  "yAxes": [
+                    {
+                      "label": "CPU Usage %",
+                      "min": 0,
+                      "max": 100
+                    }
+                  ]
+                },
+                {
+                  "id": 2,
+                  "title": "Memory Usage",
+                  "type": "graph",
+                  "targets": [
+                    {
+                      "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+                      "legendFormat": "{{instance}}"
+                    }
+                  ],
+                  "yAxes": [
+                    {
+                      "label": "Memory Usage %",
+                      "min": 0,
+                      "max": 100
+                    }
+                  ]
+                },
+                {
+                  "id": 3,
+                  "title": "Disk Usage",
+                  "type": "graph",
+                  "targets": [
+                    {
+                      "expr": "100 - ((node_filesystem_avail_bytes{mountpoint=\"/\"} * 100) / node_filesystem_size_bytes{mountpoint=\"/\"})",
+                      "legendFormat": "{{instance}}"
+                    }
+                  ],
+                  "yAxes": [
+                    {
+                      "label": "Disk Usage %",
+                      "min": 0,
+                      "max": 100
+                    }
+                  ]
+                },
+                {
+                  "id": 4,
+                  "title": "Network I/O",
+                  "type": "graph",
+                  "targets": [
+                    {
+                      "expr": "irate(node_network_receive_bytes_total[5m])",
+                      "legendFormat": "{{instance}} RX"
+                    },
+                    {
+                      "expr": "irate(node_network_transmit_bytes_total[5m])",
+                      "legendFormat": "{{instance}} TX"
+                    }
+                  ],
+                  "yAxes": [
+                    {
+                      "label": "Bytes/sec"
+                    }
+                  ]
+                },
+                {
+                  "id": 5,
+                  "title": "Disk I/O",
+                  "type": "graph",
+                  "targets": [
+                    {
+                      "expr": "irate(node_disk_read_bytes_total[5m])",
+                      "legendFormat": "{{instance}} Read"
+                    },
+                    {
+                      "expr": "irate(node_disk_written_bytes_total[5m])",
+                      "legendFormat": "{{instance}} Write"
+                    }
+                  ],
+                  "yAxes": [
+                    {
+                      "label": "Bytes/sec"
+                    }
+                  ]
+                }
+              ],
+              "time": {
+                "from": "now-1h",
+                "to": "now"
+              },
+              "refresh": "30s"
+            }
+          }
+
+- name: Create alerting rules for baremetal resources
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: monitoring.coreos.com/v1
+      kind: PrometheusRule
+      metadata:
+        name: baremetal-alerts
+        namespace: monitoring
+      spec:
+        groups:
+        - name: baremetal.rules
+          rules:
+          - alert: HighCPUUsage
+            expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High CPU usage on {{ $labels.instance }}"
+              description: "CPU usage is above 80% for more than 5 minutes"
+          
+          - alert: HighMemoryUsage
+            expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High memory usage on {{ $labels.instance }}"
+              description: "Memory usage is above 85% for more than 5 minutes"
+          
+          - alert: HighDiskUsage
+            expr: 100 - ((node_filesystem_avail_bytes{mountpoint="/"} * 100) / node_filesystem_size_bytes{mountpoint="/"}) > 90
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "High disk usage on {{ $labels.instance }}"
+              description: "Disk usage is above 90% for more than 5 minutes"
+          
+          - alert: NodeDown
+            expr: up == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Node {{ $labels.instance }} is down"
+              description: "Node has been down for more than 1 minute"
+
+- name: Wait for monitoring stack to be ready
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: monitoring
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 600
+  register: monitoring_pods
+
+- name: Display monitoring pod status
+  debug:
+    msg: "Monitoring pods: {{ monitoring_pods.resources | map(attribute='metadata.name') | list }}"

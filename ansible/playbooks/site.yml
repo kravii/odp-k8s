@@ -1,0 +1,63 @@
+---
+- name: Prepare all nodes for Kubernetes
+  hosts: k8s_cluster
+  become: yes
+  roles:
+    - common
+    - docker
+    - containerd
+    - kubernetes
+
+- name: Initialize control plane
+  hosts: control_plane[0]
+  become: yes
+  roles:
+    - kubernetes-init
+
+- name: Join additional control plane nodes
+  hosts: control_plane[1:]
+  become: yes
+  roles:
+    - kubernetes-join-control-plane
+
+- name: Join worker nodes
+  hosts: workers
+  become: yes
+  roles:
+    - kubernetes-join-worker
+
+- name: Deploy CNI plugin
+  hosts: control_plane[0]
+  become: yes
+  roles:
+    - cni-plugin
+
+- name: Deploy storage class
+  hosts: control_plane[0]
+  become: yes
+  roles:
+    - storage-class
+
+- name: Deploy monitoring stack
+  hosts: control_plane[0]
+  become: yes
+  roles:
+    - monitoring
+
+- name: Deploy Rancher
+  hosts: control_plane[0]
+  become: yes
+  roles:
+    - rancher
+
+- name: Configure user management
+  hosts: control_plane[0]
+  become: yes
+  roles:
+    - user-management
+
+- name: Deploy GUI management interface
+  hosts: control_plane[0]
+  become: yes
+  roles:
+    - gui-management

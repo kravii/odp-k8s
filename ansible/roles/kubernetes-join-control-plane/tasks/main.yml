@@ -1,0 +1,63 @@
+---
+- name: Copy join command from first control plane node
+  fetch:
+    src: /tmp/control-plane-join-command
+    dest: /tmp/control-plane-join-command
+    flat: yes
+
+- name: Read join command
+  slurp:
+    src: /tmp/control-plane-join-command
+  register: join_command_file
+
+- name: Set join command fact
+  set_fact:
+    join_command: "{{ join_command_file.content | b64decode | trim }}"
+
+- name: Join control plane node to cluster
+  command: "{{ join_command }}"
+  args:
+    warn: false
+  register: join_result
+
+- name: Create .kube directory for root
+  file:
+    path: /root/.kube
+    state: directory
+    mode: '0755'
+
+- name: Copy kubeconfig from first control plane node
+  fetch:
+    src: /etc/kubernetes/admin.conf
+    dest: /tmp/admin.conf
+    flat: yes
+
+- name: Copy kubeconfig to root
+  copy:
+    src: /tmp/admin.conf
+    dest: /root/.kube/config
+    mode: '0644'
+
+- name: Create .kube directory for acceldata user
+  file:
+    path: /home/acceldata/.kube
+    state: directory
+    owner: acceldata
+    group: acceldata
+    mode: '0755'
+
+- name: Copy kubeconfig to acceldata user
+  copy:
+    src: /tmp/admin.conf
+    dest: /home/acceldata/.kube/config
+    owner: acceldata
+    group: acceldata
+    mode: '0644'
+
+- name: Clean up temporary files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/control-plane-join-command
+    - /tmp/admin.conf

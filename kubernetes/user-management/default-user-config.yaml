@@ -1,0 +1,263 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: acceldata-user-config
+  namespace: kube-system
+data:
+  ssh_key: |
+    ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vbqajDhA... acceldata@cluster
+  user_config.yaml: |
+    # Default user configuration for acceldata
+    user:
+      name: acceldata
+      uid: 1000
+      gid: 1000
+      shell: /bin/bash
+      home: /home/acceldata
+      
+    # SSH configuration
+    ssh:
+      authorized_keys:
+        - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vbqajDhA... acceldata@cluster"
+      config: |
+        Host *
+          StrictHostKeyChecking no
+          UserKnownHostsFile /dev/null
+          
+    # Container configuration
+    containers:
+      default_user: acceldata
+      default_uid: 1000
+      default_gid: 1000
+      
+    # Pod security context
+    security_context:
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+      runAsNonRoot: true
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: acceldata-ssh-key
+  namespace: kube-system
+type: Opaque
+data:
+  ssh-private-key: LS0tLS1CRUdJTi... # Base64 encoded private key
+  ssh-public-key: c3NoLXJzYSBBQUF... # Base64 encoded public key
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: acceldata-user-setup
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: acceldata-user-setup
+  template:
+    metadata:
+      labels:
+        app: acceldata-user-setup
+    spec:
+      hostNetwork: true
+      hostPID: true
+      containers:
+      - name: user-setup
+        image: alpine:latest
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          # Create acceldata user if it doesn't exist
+          if ! id acceldata >/dev/null 2>&1; then
+            adduser -D -s /bin/bash acceldata
+            echo "acceldata:$(openssl rand -base64 32)" | chpasswd
+          fi
+          
+          # Create .ssh directory
+          mkdir -p /home/acceldata/.ssh
+          chmod 700 /home/acceldata/.ssh
+          
+          # Add SSH key
+          echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vbqajDhA... acceldata@cluster" > /home/acceldata/.ssh/authorized_keys
+          chmod 600 /home/acceldata/.ssh/authorized_keys
+          chown -R acceldata:acceldata /home/acceldata/.ssh
+          
+          # Add acceldata to docker group
+          adduser acceldata docker
+          
+          # Keep container running
+          while true; do sleep 3600; done
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: host-root
+          mountPath: /host
+        - name: host-home
+          mountPath: /home
+      volumes:
+      - name: host-root
+        hostPath:
+          path: /
+      - name: host-home
+        hostPath:
+          path: /home
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pod-default-user-config
+  namespace: kube-system
+data:
+  pod-template.yaml: |
+    # Default pod template with acceldata user
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: example-pod
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        runAsNonRoot: true
+      containers:
+      - name: main
+        image: alpine:latest
+        command: ["sleep", "infinity"]
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: var-tmp
+          mountPath: /var/tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: var-tmp
+        emptyDir: {}
+
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionWebhook
+metadata:
+  name: default-user-webhook
+spec:
+  clientConfig:
+    service:
+      name: default-user-webhook-service
+      namespace: kube-system
+      path: "/mutate"
+  rules:
+  - operations: ["CREATE"]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+  failurePolicy: Ignore
+  sideEffects: None
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: default-user-webhook
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: default-user-webhook
+  template:
+    metadata:
+      labels:
+        app: default-user-webhook
+    spec:
+      containers:
+      - name: webhook
+        image: python:3.9-slim
+        command: ["python", "-c", """
+import json
+import base64
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from kubernetes import client, config
+
+class WebhookHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        if self.path == '/mutate':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            
+            # Parse admission request
+            admission_request = json.loads(post_data.decode('utf-8'))
+            
+            # Extract pod spec
+            pod_spec = admission_request['request']['object']['spec']
+            
+            # Add default user configuration
+            if 'securityContext' not in pod_spec:
+                pod_spec['securityContext'] = {}
+            
+            pod_spec['securityContext']['runAsUser'] = 1000
+            pod_spec['securityContext']['runAsGroup'] = 1000
+            pod_spec['securityContext']['fsGroup'] = 1000
+            pod_spec['securityContext']['runAsNonRoot'] = True
+            
+            # Update containers
+            for container in pod_spec.get('containers', []):
+                if 'securityContext' not in container:
+                    container['securityContext'] = {}
+                
+                container['securityContext']['runAsUser'] = 1000
+                container['securityContext']['runAsGroup'] = 1000
+                container['securityContext']['allowPrivilegeEscalation'] = False
+            
+            # Create admission response
+            admission_response = {
+                "apiVersion": "admission.k8s.io/v1",
+                "kind": "AdmissionReview",
+                "response": {
+                    "uid": admission_request['request']['uid'],
+                    "allowed": True,
+                    "patch": base64.b64encode(json.dumps([
+                        {"op": "replace", "path": "/spec", "value": pod_spec}
+                    ]).encode()).decode()
+                }
+            }
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(admission_response).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+if __name__ == '__main__':
+    server = HTTPServer(('0.0.0.0', 8080), WebhookHandler)
+    server.serve_forever()
+        """]
+        ports:
+        - containerPort: 8080
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: default-user-webhook-service
+  namespace: kube-system
+spec:
+  selector:
+    app: default-user-webhook
+  ports:
+  - port: 443
+    targetPort: 8080
+    protocol: TCP

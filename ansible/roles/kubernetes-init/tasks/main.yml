@@ -1,0 +1,99 @@
+---
+- name: Initialize Kubernetes cluster
+  command: >
+    kubeadm init
+    --control-plane-endpoint={{ api_server_lb_ip }}:6443
+    --upload-certs
+    --pod-network-cidr={{ pod_cidr }}
+    --service-cidr={{ service_cidr }}
+    --kubernetes-version={{ kubernetes_version }}
+    --cri-socket=unix:///run/containerd/containerd.sock
+    --node-name={{ inventory_hostname }}
+  register: kubeadm_init
+  args:
+    warn: false
+
+- name: Create .kube directory for root
+  file:
+    path: /root/.kube
+    state: directory
+    mode: '0755'
+
+- name: Copy kubeconfig to root
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /root/.kube/config
+    mode: '0644'
+    remote_src: yes
+
+- name: Create .kube directory for acceldata user
+  file:
+    path: /home/acceldata/.kube
+    state: directory
+    owner: acceldata
+    group: acceldata
+    mode: '0755'
+
+- name: Copy kubeconfig to acceldata user
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /home/acceldata/.kube/config
+    owner: acceldata
+    group: acceldata
+    mode: '0644'
+    remote_src: yes
+
+- name: Extract join command for control plane
+  set_fact:
+    control_plane_join_command: "{{ kubeadm_init.stdout_lines[-2] }}"
+
+- name: Extract join command for workers
+  set_fact:
+    worker_join_command: "{{ kubeadm_init.stdout_lines[-1] }}"
+
+- name: Save join commands to files
+  copy:
+    content: "{{ item.content }}"
+    dest: "{{ item.dest }}"
+    mode: '0644'
+  loop:
+    - { content: "{{ control_plane_join_command }}", dest: "/tmp/control-plane-join-command" }
+    - { content: "{{ worker_join_command }}", dest: "/tmp/worker-join-command" }
+
+- name: Wait for API server to be ready
+  uri:
+    url: "https://{{ api_server_lb_ip }}:6443/healthz"
+    method: GET
+    validate_certs: no
+  register: api_server_health
+  until: api_server_health.status == 200
+  retries: 30
+  delay: 10
+
+- name: Create admin user for Rancher
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: admin-user
+        namespace: kube-system
+      automountServiceAccountToken: false
+
+- name: Create ClusterRoleBinding for admin user
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: admin-user
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: cluster-admin
+      subjects:
+      - kind: ServiceAccount
+        name: admin-user
+        namespace: kube-system

@@ -1,0 +1,206 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: resource-pool-config
+  namespace: kube-system
+data:
+  pool-config.yaml: |
+    # Resource Pool Configuration
+    # This configuration defines how resources are pooled across all servers
+    
+    pools:
+      cpu:
+        total_cores: 24  # Total CPU cores across all servers
+        reserved_for_system: 4  # Cores reserved for system processes
+        available_for_pods: 20  # Cores available for pod scheduling
+        
+      memory:
+        total_gb: 96  # Total memory in GB across all servers
+        reserved_for_system: 16  # GB reserved for system processes
+        available_for_pods: 80  # GB available for pod scheduling
+        
+      storage:
+        fast_ssd:
+          total_gb: 500
+          available_gb: 450
+          mount_path: "/mnt/fast-ssd"
+          
+        slow_hdd:
+          total_gb: 1000
+          available_gb: 900
+          mount_path: "/mnt/slow-hdd"
+          
+        nvme:
+          total_gb: 200
+          available_gb: 180
+          mount_path: "/mnt/nvme"
+    
+    scheduling_policy:
+      # How resources are distributed across namespaces
+      distribution_strategy: "proportional"  # proportional, equal, priority
+      
+      # Default resource allocation per namespace
+      default_allocation:
+        cpu_request: "0.5"
+        cpu_limit: "2"
+        memory_request: "1Gi"
+        memory_limit: "4Gi"
+        storage_request: "10Gi"
+        
+      # Priority-based allocation
+      priority_namespaces:
+        - name: "production"
+          priority: 100
+          cpu_allocation: "40%"
+          memory_allocation: "40%"
+          
+        - name: "staging"
+          priority: 50
+          cpu_allocation: "30%"
+          memory_allocation: "30%"
+          
+        - name: "development"
+          priority: 10
+          cpu_allocation: "30%"
+          memory_allocation: "30%"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resource-pool-manager
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: resource-pool-manager
+  template:
+    metadata:
+      labels:
+        app: resource-pool-manager
+    spec:
+      serviceAccountName: resource-pool-manager
+      containers:
+      - name: manager
+        image: python:3.9-slim
+        command: ["python", "-c", """
+import time
+import json
+import yaml
+import requests
+from kubernetes import client, config
+
+# Load kubeconfig
+config.load_in_cluster_config()
+v1 = client.CoreV1Api()
+
+def get_cluster_resources():
+    nodes = v1.list_node()
+    total_cpu = 0
+    total_memory = 0
+    
+    for node in nodes.items:
+        cpu = node.status.allocatable.get('cpu', '0')
+        memory = node.status.allocatable.get('memory', '0')
+        
+        # Convert to numeric values
+        if cpu.endswith('m'):
+            total_cpu += int(cpu[:-1]) / 1000
+        else:
+            total_cpu += int(cpu)
+            
+        if memory.endswith('Ki'):
+            total_memory += int(memory[:-2]) / 1024 / 1024
+        elif memory.endswith('Mi'):
+            total_memory += int(memory[:-2]) / 1024
+        elif memory.endswith('Gi'):
+            total_memory += int(memory[:-2])
+        else:
+            total_memory += int(memory) / 1024 / 1024 / 1024
+    
+    return {
+        'total_cpu': total_cpu,
+        'total_memory': total_memory,
+        'node_count': len(nodes.items)
+    }
+
+def update_resource_pool_status():
+    resources = get_cluster_resources()
+    
+    # Create or update ConfigMap with current resource status
+    config_map = client.V1ConfigMap(
+        metadata=client.V1ObjectMeta(
+            name="resource-pool-status",
+            namespace="kube-system"
+        ),
+        data={
+            "status.json": json.dumps(resources, indent=2)
+        }
+    )
+    
+    try:
+        v1.patch_namespaced_config_map(
+            name="resource-pool-status",
+            namespace="kube-system",
+            body=config_map
+        )
+    except:
+        v1.create_namespaced_config_map(
+            namespace="kube-system",
+            body=config_map
+        )
+
+while True:
+    try:
+        update_resource_pool_status()
+        print("Resource pool status updated")
+    except Exception as e:
+        print(f"Error updating resource pool status: {e}")
+    
+    time.sleep(60)  # Update every minute
+        """]
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+      volumes:
+      - name: config
+        configMap:
+          name: resource-pool-config
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: resource-pool-manager
+  namespace: kube-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: resource-pool-manager
+rules:
+- apiGroups: [""]
+  resources: ["nodes", "configmaps"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+- apiGroups: [""]
+  resources: ["resourcequotas", "limitranges"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: resource-pool-manager-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: resource-pool-manager
+subjects:
+- kind: ServiceAccount
+  name: resource-pool-manager
+  namespace: kube-system

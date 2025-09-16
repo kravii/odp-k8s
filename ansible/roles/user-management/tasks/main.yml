@@ -1,0 +1,340 @@
+---
+- name: Create user-management namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: user-management
+        labels:
+          name: user-management
+
+- name: Create default user namespaces
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ item }}"
+        labels:
+          managed-by: user-management
+          user-namespace: "true"
+      spec: {}
+  loop:
+    - user-demo
+    - user-test
+    - user-dev
+
+- name: Create Role for namespace users
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: Role
+      metadata:
+        name: namespace-user
+        namespace: "{{ item }}"
+      rules:
+      - apiGroups: [""]
+        resources: ["pods", "services", "endpoints", "persistentvolumeclaims", "events", "configmaps", "secrets"]
+        verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+      - apiGroups: ["apps"]
+        resources: ["deployments", "daemonsets", "replicasets", "statefulsets"]
+        verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+      - apiGroups: ["extensions"]
+        resources: ["ingresses"]
+        verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+      - apiGroups: ["networking.k8s.io"]
+        resources: ["networkpolicies"]
+        verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+      - apiGroups: ["batch"]
+        resources: ["jobs", "cronjobs"]
+        verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  loop:
+    - user-demo
+    - user-test
+    - user-dev
+
+- name: Create ServiceAccount for demo user
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: demo-user
+        namespace: user-demo
+
+- name: Create ServiceAccount for test user
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: test-user
+        namespace: user-test
+
+- name: Create ServiceAccount for dev user
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: dev-user
+        namespace: user-dev
+
+- name: Create RoleBinding for demo user
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: RoleBinding
+      metadata:
+        name: demo-user-binding
+        namespace: user-demo
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: Role
+        name: namespace-user
+      subjects:
+      - kind: ServiceAccount
+        name: demo-user
+        namespace: user-demo
+
+- name: Create RoleBinding for test user
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: RoleBinding
+      metadata:
+        name: test-user-binding
+        namespace: user-test
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: Role
+        name: namespace-user
+      subjects:
+      - kind: ServiceAccount
+        name: test-user
+        namespace: user-test
+
+- name: Create RoleBinding for dev user
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: RoleBinding
+      metadata:
+        name: dev-user-binding
+        namespace: user-dev
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: Role
+        name: namespace-user
+      subjects:
+      - kind: ServiceAccount
+        name: dev-user
+        namespace: user-dev
+
+- name: Create ResourceQuota for demo user
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ResourceQuota
+      metadata:
+        name: demo-user-quota
+        namespace: user-demo
+      spec:
+        hard:
+          requests.cpu: "2"
+          requests.memory: 4Gi
+          limits.cpu: "4"
+          limits.memory: 8Gi
+          persistentvolumeclaims: "10"
+          pods: "20"
+          services: "10"
+
+- name: Create ResourceQuota for test user
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ResourceQuota
+      metadata:
+        name: test-user-quota
+        namespace: user-test
+      spec:
+        hard:
+          requests.cpu: "4"
+          requests.memory: 8Gi
+          limits.cpu: "8"
+          limits.memory: 16Gi
+          persistentvolumeclaims: "20"
+          pods: "50"
+          services: "20"
+
+- name: Create ResourceQuota for dev user
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ResourceQuota
+      metadata:
+        name: dev-user-quota
+        namespace: user-dev
+      spec:
+        hard:
+          requests.cpu: "8"
+          requests.memory: 16Gi
+          limits.cpu: "16"
+          limits.memory: 32Gi
+          persistentvolumeclaims: "50"
+          pods: "100"
+          services: "50"
+
+- name: Create LimitRange for demo user
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: LimitRange
+      metadata:
+        name: demo-user-limits
+        namespace: user-demo
+      spec:
+        limits:
+        - default:
+            cpu: "1"
+            memory: 2Gi
+          defaultRequest:
+            cpu: "0.5"
+            memory: 1Gi
+          type: Container
+
+- name: Create LimitRange for test user
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: LimitRange
+      metadata:
+        name: test-user-limits
+        namespace: user-test
+      spec:
+        limits:
+        - default:
+            cpu: "2"
+            memory: 4Gi
+          defaultRequest:
+            cpu: "1"
+            memory: 2Gi
+          type: Container
+
+- name: Create LimitRange for dev user
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: LimitRange
+      metadata:
+        name: dev-user-limits
+        namespace: user-dev
+      spec:
+        limits:
+        - default:
+            cpu: "4"
+            memory: 8Gi
+          defaultRequest:
+            cpu: "2"
+            memory: 4Gi
+          type: Container
+
+- name: Create user management API deployment
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: user-management-api
+        namespace: user-management
+      spec:
+        replicas: 2
+        selector:
+          matchLabels:
+            app: user-management-api
+        template:
+          metadata:
+            labels:
+              app: user-management-api
+          spec:
+            serviceAccountName: user-management-api
+            containers:
+            - name: api
+              image: python:3.9-slim
+              ports:
+              - containerPort: 8000
+              env:
+              - name: KUBECONFIG
+                value: /var/lib/kubelet/config
+              volumeMounts:
+              - name: kubeconfig
+                mountPath: /var/lib/kubelet
+                readOnly: true
+              command: ["python", "-m", "http.server", "8000"]
+            volumes:
+            - name: kubeconfig
+              secret:
+                secretName: user-management-kubeconfig
+
+- name: Create ServiceAccount for user management API
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: user-management-api
+        namespace: user-management
+
+- name: Create ClusterRole for user management API
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRole
+      metadata:
+        name: user-management-api
+      rules:
+      - apiGroups: [""]
+        resources: ["namespaces", "serviceaccounts"]
+        verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        resources: ["roles", "rolebindings"]
+        verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+      - apiGroups: [""]
+        resources: ["resourcequotas", "limitranges"]
+        verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+- name: Create ClusterRoleBinding for user management API
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: user-management-api-binding
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: user-management-api
+      subjects:
+      - kind: ServiceAccount
+        name: user-management-api
+        namespace: user-management
