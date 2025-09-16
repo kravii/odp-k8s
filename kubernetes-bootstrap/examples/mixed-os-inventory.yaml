@@ -1,0 +1,71 @@
+# Mixed OS Kubernetes Cluster Inventory Example
+# Demonstrates support for different operating systems in the same cluster
+
+hosts:
+  # Ubuntu 22.04 Control Plane Nodes
+  - hostname: ubuntu-master-01
+    ip_address: 192.168.1.10
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    
+  - hostname: ubuntu-master-02
+    ip_address: 192.168.1.11
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    
+  - hostname: ubuntu-master-03
+    ip_address: 192.168.1.12
+    username: root
+    ssh_port: 22
+    os: ubuntu
+    os_version: "22.04"
+    group: production
+    
+  # CentOS 8 Worker Nodes
+  - hostname: centos-worker-01
+    ip_address: 192.168.1.20
+    username: root
+    ssh_port: 22
+    os: centos
+    os_version: "8"
+    group: production
+    
+  - hostname: centos-worker-02
+    ip_address: 192.168.1.21
+    username: root
+    ssh_port: 22
+    os: centos
+    os_version: "8"
+    group: production
+    
+  # Rocky Linux 9 Worker Nodes
+  - hostname: rocky-worker-01
+    ip_address: 192.168.1.30
+    username: root
+    ssh_port: 22
+    os: rocky
+    os_version: "9"
+    group: production
+    
+  - hostname: rocky-worker-02
+    ip_address: 192.168.1.31
+    username: root
+    ssh_port: 22
+    os: rocky
+    os_version: "9"
+    group: production
+    
+  # RHEL 8 Worker Nodes
+  - hostname: rhel-worker-01
+    ip_address: 192.168.1.40
+    username: root
+    ssh_port: 22
+    os: rhel
+    os_version: "8"
+    group: production
